@@ -1,18 +1,24 @@
 ﻿using System.Diagnostics;
 using System.Security.Principal;
 using System.Diagnostics.Eventing.Reader;
+using System;
+using System.IO;
+using System.Linq;
+using System.Collections.Generic;
 
 class Program
 {
     static int Main(string[] args)
     {
-        try {
+        try
+        {
             var auditor = new ScreensaverAuditor();
 
             bool enablePolicy = false;
             DateTime startDate = DateTime.Now.AddDays(-7);
             DateTime endDate = DateTime.Now;
-            string? outputPath = null;
+            // --output 옵션이 없으면 기본 파일명 사용
+            string outputPath = "ScreensaverEvents.csv";
 
             for (int i = 0; i < args.Length; i++)
             {
@@ -22,17 +28,29 @@ class Program
                         enablePolicy = true;
                         break;
                     case "--start-date":
-                        if (i + 1 < args.Length && DateTime.TryParse(args[i + 1], out var sd))
+                        if (i + 1 < args.Length)
                         {
-                            startDate = sd;
-                            i++;
+                            // 명시한 형식 ("YYYY-MM-DD")만 허용
+                            if (DateTime.TryParseExact(args[i + 1], "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var sd))
+                                startDate = sd;
+                            else
+                            {
+                                Console.WriteLine("Error: 시작 날짜 형식이 잘못되었습니다. YYYY-MM-DD 형식으로 입력하세요.");
+                                return 2;
+                            }
                         }
                         break;
                     case "--end-date":
-                        if (i + 1 < args.Length && DateTime.TryParse(args[i + 1], out var ed))
+                        if (i + 1 < args.Length)
                         {
-                            endDate = ed;
-                            i++;
+                            // 명시한 형식 ("YYYY-MM-DD")만 허용
+                            if (DateTime.TryParseExact(args[i + 1], "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var ed))
+                                endDate = ed;
+                            else
+                            {
+                                Console.WriteLine("Error: 종료 날짜 형식이 잘못되었습니다. YYYY-MM-DD 형식으로 입력하세요.");
+                                return 2;
+                            }
                         }
                         break;
                     case "--output":
@@ -53,7 +71,7 @@ class Program
 
             var events = auditor.GetScreensaverEvents(startDate, endDate);
             var analysis = auditor.AnalyzeScreensaverUsage(events);
-        
+
             // 결과 출력
             foreach (var usage in analysis)
             {
@@ -64,7 +82,6 @@ class Program
             }
 
             // CSV 파일로 저장
-            if (!string.IsNullOrEmpty(outputPath))
             {
                 using (var writer = new StreamWriter(outputPath))
                 {
@@ -78,13 +95,15 @@ class Program
             }
 
             return 0;
-        } catch (UnauthorizedAccessException)
+        }
+        catch (UnauthorizedAccessException)
         {
             Console.Error.WriteLine("Error: 관리자 권한이 필요합니다. EXE를 우클릭 -> '관리자 권한으로 실행' 해주세요.");
             return 1;
         }
         catch (Exception ex)
         {
+            // 일반 오류는 표준 에러 스트림으로
             Console.Error.WriteLine($"Error: {ex.Message}");
             return 2;
         }
@@ -145,10 +164,11 @@ public class ScreensaverAuditor
 
             ProcessStartInfo startInfo = new ProcessStartInfo();
             startInfo.FileName = "auditpol.exe";
+            // --subcategory 인자명은 반드시 "Other System Events"로 설정해야 화면보호기 이벤트가 포함됨
             startInfo.Arguments = "/set /subcategory:\"Other System Events\" /success:enable /failure:enable";
+
+            // 이미 EXE 자체를 "관리자 권한으로 실행" 한 뒤라면 UAC 재호출(Verb/runas) 불필요
             startInfo.UseShellExecute = false;
-            startInfo.RedirectStandardOutput = true;
-            startInfo.Verb = "runas";
 
             Process? process = Process.Start(startInfo);
             if (process == null)
@@ -231,7 +251,7 @@ public class ScreensaverAuditor
             }
         }
 
-        return usageByUser.Select(kvp => 
+        return usageByUser.Select(kvp =>
         {
             var usage = kvp.Value;
             usage.ScreensaverActivationCount = usage.ScreensaverPeriods.Count;
