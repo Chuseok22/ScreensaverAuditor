@@ -216,7 +216,7 @@ namespace ScreensaverAuditor
 
         private void AddHeaders(IXLWorksheet worksheet)
         {
-            string[] headers = { "사용자 정보", "날짜 및 시간", "이벤트 ID", "화면보호기 실행횟수", "총 지속 시간 (시간)" };
+            string[] headers = { "사용자 정보", "PC 관리번호", "날짜 및 시간", "이벤트 ID", "화면보호기 실행횟수", "총 지속 시간 (시간)" };
             for (int i = 0; i < headers.Length; i++)
             {
                 worksheet.Cell(1, i + 1).Value = headers[i];
@@ -235,30 +235,34 @@ namespace ScreensaverAuditor
             }
         }
 
-        private void AddRow(IXLWorksheet worksheet, int row, ScreensaverUsage usage, (DateTime Start, DateTime? End) period)
+        private void AddRow(IXLWorksheet worksheet, int row, ScreensaverUsage usage, (DateTime Start, DateTime? End, int EventId) period)
         {
-            string eventId = period.End.HasValue ? "4803" : "4802";
+            // 이벤트 ID는 원래 값 그대로 사용
+            int eventId = period.EventId;
+
+            // 지속 시간 계산
             double duration = period.End.HasValue
                 ? (period.End.Value - period.Start).TotalHours
                 : (DateTime.Now - period.Start).TotalHours;
 
             worksheet.Cell(row, 1).Value = usage.Username;
+            worksheet.Cell(row, 2).Value = usage.ComputerName; // PC 관리번호 추가
 
-            var dateCell = worksheet.Cell(row, 2);
+            var dateCell = worksheet.Cell(row, 3); // 열 위치 조정
             dateCell.Value = period.Start;
             dateCell.Style.DateFormat.Format = "yyyy-MM-dd HH:mm:ss";
 
-            worksheet.Cell(row, 3).Value = eventId;
-            worksheet.Cell(row, 4).Value = usage.ScreensaverActivationCount;
+            worksheet.Cell(row, 4).Value = eventId; // 열 위치 조정
+            worksheet.Cell(row, 5).Value = usage.ScreensaverActivationCount; // 열 위치 조정
 
-            var durationCell = worksheet.Cell(row, 5);
+            var durationCell = worksheet.Cell(row, 6); // 열 위치 조정
             durationCell.Value = Math.Round(duration, 2);
             durationCell.Style.NumberFormat.Format = "#,##0.00";
         }
 
         private void ApplyFormatting(IXLWorksheet worksheet)
         {
-            var headerRange = worksheet.Range(1, 1, 1, 5);
+            var headerRange = worksheet.Range(1, 1, 1, 6); // 열 수 조정
             headerRange.Style.Font.Bold = true;
             headerRange.Style.Fill.BackgroundColor = XLColor.LightGray;
 
@@ -271,23 +275,27 @@ namespace ScreensaverAuditor
     public class ScreensaverEvent
     {
         public DateTime Timestamp { get; }
-        public string EventId { get; }
+        public int EventId { get; }  // 문자열에서 정수로 변경
         public string Username { get; }
         public string ComputerName { get; }
 
-        public ScreensaverEvent(DateTime ts, string id, string user, string comp)
+        public ScreensaverEvent(DateTime ts, int id, string user, string comp)
         { Timestamp = ts; EventId = id; Username = user; ComputerName = comp; }
     }
 
     public class ScreensaverUsage
     {
         public string Username { get; }
+        public string ComputerName { get; set; } = ""; // 컴퓨터 정보 추가
         public int ScreensaverActivationCount { get; set; }
         public TimeSpan TotalScreensaverDuration { get; set; }
-        public List<(DateTime Start, DateTime? End)> ScreensaverPeriods { get; }
+        public List<(DateTime Start, DateTime? End, int EventId)> ScreensaverPeriods { get; } // EventId를 정수형으로 변경
 
         public ScreensaverUsage(string user)
-        { Username = user; ScreensaverPeriods = new(); }
+        {
+            Username = user;
+            ScreensaverPeriods = new List<(DateTime, DateTime?, int)>();
+        }
     }
 
     // ───────────────────────── 핵심 로직 ─────────────────────────
@@ -327,16 +335,14 @@ namespace ScreensaverAuditor
 
             try
             {
-                // 임시 CSV 파일 경로
-                string tempCsv = Path.Combine(Path.GetTempPath(), $"screensaver_events_{DateTime.Now:yyyyMMddHHmmss}.csv");
-
-                // PowerShell 명령어 구성
-                string command = $@"Get-WinEvent -FilterHashtable @{{
-                    LogName='Security'
-                    ID=4802,4803
-                    StartTime=[datetime]'{from:yyyy-MM-dd HH:mm:ss}'
-                    EndTime=[datetime]'{to:yyyy-MM-dd HH:mm:ss}'
-                }}";
+                // PowerShell 명령어 구성 - CSV 파일을 사용하지 않고 직접 출력 처리
+                string command = $@"
+            Get-WinEvent -FilterHashtable @{{
+                LogName='Security'
+                ID=4802,4803
+                StartTime=[datetime]'{from:yyyy-MM-dd HH:mm:ss}'
+                EndTime=[datetime]'{to:yyyy-MM-dd HH:mm:ss}'
+            }}";
 
                 if (user != null)
                 {
@@ -344,7 +350,7 @@ namespace ScreensaverAuditor
                     command += $" | Where-Object {{ $_.Message -like '*{safeUser}*' }}";
                 }
 
-                command += " | Select-Object TimeCreated,Id,Message | Export-Csv -Path '" + tempCsv.Replace("'", "''") + "' -Encoding UTF8 -NoTypeInformation";
+                command += " | Format-List TimeCreated,Id,MachineName,Message"; // 포맷을 CSV 대신 리스트로 변경
 
                 // PowerShell 실행
                 var startInfo = new ProcessStartInfo
@@ -357,58 +363,77 @@ namespace ScreensaverAuditor
                     CreateNoWindow = true
                 };
 
+                Console.WriteLine("PowerShell 명령 실행: " + command);
+
                 using (var process = Process.Start(startInfo))
                 {
                     if (process == null) throw new Exception("PowerShell 실행 실패");
 
-                    // 오류 출력 확인
+                    // 출력 읽기
+                    string output = process.StandardOutput.ReadToEnd();
                     string error = process.StandardError.ReadToEnd();
+
                     process.WaitForExit();
 
                     if (process.ExitCode != 0)
                     {
+                        Console.WriteLine("PowerShell 오류:");
+                        Console.WriteLine(error);
                         throw new Exception($"PowerShell 오류: {error}");
                     }
 
-                    // CSV 파일 읽기
-                    if (File.Exists(tempCsv))
+                    // 디버깅 출력
+                    Console.WriteLine("PowerShell 명령 결과:");
+                    Console.WriteLine(output);
+
+                    // 출력 파싱
+                    var currentEvent = new Dictionary<string, string>();
+                    foreach (var line in output.Split('\n'))
                     {
-                        using (var reader = new StreamReader(tempCsv))
+                        string trimmedLine = line.Trim();
+                        if (string.IsNullOrWhiteSpace(trimmedLine))
                         {
-                            // 헤더 건너뛰기
-                            reader.ReadLine();
-
-                            using var parser = new Microsoft.VisualBasic.FileIO.TextFieldParser(reader);
-                            parser.HasFieldsEnclosedInQuotes = true;
-                            parser.SetDelimiters(",");
-                            while (!parser.EndOfData)
+                            if (currentEvent.Count > 0)
                             {
-                                var parts = parser.ReadFields();
-                                if (parts?.Length >= 3)
+                                try
                                 {
-                                    // CSV 데이터 파싱
-                                    var timestamp = DateTime.Parse(parts[0].Trim('"'));
-                                    var eventId = parts[1].Trim('"');
-                                    var message = parts[2].Trim('"');
+                                    if (currentEvent.TryGetValue("TimeCreated", out var timeCreatedStr) &&
+                                        currentEvent.TryGetValue("Id", out var idStr) &&
+                                        DateTime.TryParse(timeCreatedStr, out var timeCreated) &&
+                                        int.TryParse(idStr, out var id))
+                                    {
+                                        string computerName = currentEvent.TryGetValue("MachineName", out var comp) ? comp : "Unknown";
+                                        string message = currentEvent.TryGetValue("Message", out var msg) ? msg : "";
 
-                                    // 사용자 이름 추출 (Message에서)
-                                    string username = ExtractUsernameFromMessage(message);
+                                        // 사용자 이름은 기본값으로 설정
+                                        string username = "DefaultUser";
 
-                                    var evt = new ScreensaverEvent(
-                                        timestamp,
-                                        eventId,
-                                        username,
-                                        Environment.MachineName);
+                                        var evt = new ScreensaverEvent(
+                                            timeCreated,
+                                            id,
+                                            username,
+                                            computerName);
 
-                                    events.Add(evt);
-                                    Console.WriteLine($"이벤트 발견: ID={evt.EventId}, 시간={evt.Timestamp:yyyy-MM-dd HH:mm:ss}, 사용자={evt.Username}");
+                                        events.Add(evt);
+                                        Console.WriteLine($"이벤트 추가: ID={id}, 시간={timeCreated:yyyy-MM-dd HH:mm:ss}, PC={computerName}");
+                                    }
                                 }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine($"이벤트 처리 오류: {ex.Message}");
+                                }
+                                currentEvent.Clear();
                             }
+                            continue;
                         }
 
-                        // 임시 파일 삭제
-                        try { File.Delete(tempCsv); }
-                        catch { /* 무시 */ }
+                        int colonPos = trimmedLine.IndexOf(':');
+                        if (colonPos > 0)
+                        {
+                            string key = trimmedLine.Substring(0, colonPos).Trim();
+                            string value = trimmedLine.Substring(colonPos + 1).Trim();
+                            currentEvent[key] = value;
+                        }
                     }
                 }
             }
@@ -446,33 +471,64 @@ namespace ScreensaverAuditor
         public List<ScreensaverUsage> AnalyzeScreensaverUsage(IEnumerable<ScreensaverEvent> events)
         {
             var dict = new Dictionary<string, ScreensaverUsage>();
+
+            // 모든 이벤트 출력 (디버깅용)
+            Console.WriteLine("분석 중인 이벤트:");
+            foreach (var e in events)
+            {
+                Console.WriteLine($"  ID: {e.EventId}, 시간: {e.Timestamp}, 사용자: {e.Username}, 컴퓨터: {e.ComputerName}");
+            }
+
             foreach (var e in events.OrderBy(e => e.Timestamp))
             {
                 if (!dict.TryGetValue(e.Username, out var usage))
                 {
                     usage = new ScreensaverUsage(e.Username);
+                    usage.ComputerName = e.ComputerName; // 컴퓨터 정보 설정
                     dict[e.Username] = usage;
                 }
+
                 switch (e.EventId)
                 {
-                    case "4802":
-                        usage.ScreensaverPeriods.Add((e.Timestamp, null));
+                    case 4802: // 화면보호기 시작
+                        usage.ScreensaverPeriods.Add((e.Timestamp, null, e.EventId));
+                        Console.WriteLine($"화면보호기 시작 추가: {e.Username}, {e.Timestamp}, {e.EventId}");
                         break;
-                    case "4803":
-                        var open = usage.ScreensaverPeriods.FirstOrDefault(p => p.End == null);
+
+                    case 4803: // 화면보호기 종료
+                        // 매칭되는 시작 이벤트 찾기
+                        var open = usage.ScreensaverPeriods
+                            .Where(p => p.End == null && p.EventId == 4802) // 4802로 시작된 항목만 검색
+                            .OrderBy(p => p.Start)
+                            .FirstOrDefault();
+
                         if (open.Start != default)
                         {
                             int idx = usage.ScreensaverPeriods.IndexOf(open);
-                            usage.ScreensaverPeriods[idx] = (open.Start, e.Timestamp);
+                            usage.ScreensaverPeriods[idx] = (open.Start, e.Timestamp, open.EventId);
+                            Console.WriteLine($"화면보호기 종료 매칭: {e.Username}, {open.Start} ~ {e.Timestamp}");
+                        }
+                        else
+                        {
+                            // 4803 이벤트도 독립적으로 저장 (시작 이벤트 누락 시)
+                            usage.ScreensaverPeriods.Add((e.Timestamp, e.Timestamp, e.EventId));
+                            Console.WriteLine($"화면보호기 종료 이벤트 추가: {e.Username}, {e.Timestamp}, {e.EventId}");
                         }
                         break;
                 }
             }
+
             foreach (var u in dict.Values)
             {
-                u.ScreensaverActivationCount = u.ScreensaverPeriods.Count;
-                u.TotalScreensaverDuration = u.ScreensaverPeriods.Aggregate(TimeSpan.Zero, (acc, p) => acc + ((p.End ?? DateTime.Now) - p.Start));
+                // 화면보호기 활성화 횟수는 4802와 4803 이벤트의 합계로 계산
+                u.ScreensaverActivationCount = u.ScreensaverPeriods.Count(p => p.EventId == 4802 || p.EventId == 4803);
+
+                // 총 지속 시간 계산
+                u.TotalScreensaverDuration = u.ScreensaverPeriods
+                    .Where(p => p.End.HasValue) // 종료된 항목만
+                    .Aggregate(TimeSpan.Zero, (acc, p) => acc + (p.End.Value - p.Start));
             }
+
             return dict.Values.ToList();
         }
 
