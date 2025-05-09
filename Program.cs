@@ -5,6 +5,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
+using System.Xml;
 
 class Program
 {
@@ -116,12 +117,20 @@ class Program
 
             // CSV 파일로 저장
             {
+                // 경로 유효성 검사 및 디렉토리 생성
+                string directory = Path.GetDirectoryName(outputPath) ?? string.Empty;
+                if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
                 using (var writer = new StreamWriter(outputPath))
                 {
                     writer.WriteLine("사용자,화면보호기 실행 횟수,총 지속 시간(시간)");
                     foreach (var usage in analysis)
                     {
-                        writer.WriteLine($"{usage.Username},{usage.ScreensaverActivationCount},{usage.TotalScreensaverDuration.TotalHours:F2}");
+                        // CSV 이스케이핑 처리
+                        string escapedUsername = $"\"{usage.Username.Replace("\"", "\"\"")}\"";
+                        writer.WriteLine($"{escapedUsername},{usage.ScreensaverActivationCount},{usage.TotalScreensaverDuration.TotalHours:F2}");
                     }
                 }
                 Console.WriteLine($"결과가 {outputPath}에 저장되었습니다.");
@@ -273,11 +282,16 @@ public class ScreensaverAuditor
                     usage.ScreensaverPeriods.Add((evt.Timestamp, null));
                     break;
                 case "4803": // 화면보호기 종료
-                    var lastPeriod = usage.ScreensaverPeriods.FindLast(p => p.End == null);
-                    if (lastPeriod.Start != default)
+                    // 열린 세션들을 시작 오름차순으로 정렬한 뒤, 가장 오래된 세션만 종료
+                    var openPeriods = usage.ScreensaverPeriods
+                        .Where(p => p.End == null)
+                        .OrderBy(p => p.Start)
+                        .ToList();
+                    if (openPeriods.Any())
                     {
-                        int index = usage.ScreensaverPeriods.IndexOf(lastPeriod);
-                        usage.ScreensaverPeriods[index] = (lastPeriod.Start, evt.Timestamp);
+                        var oldest = openPeriods.First();
+                        int index = usage.ScreensaverPeriods.IndexOf(oldest);
+                        usage.ScreensaverPeriods[index] = (oldest.Start, evt.Timestamp);
                     }
                     break;
             }
@@ -313,10 +327,23 @@ public class ScreensaverAuditor
     {
         try
         {
+            // XML 로드 및 네임스페이스 설정
+            var xml = new XmlDocument();
+            xml.LoadXml(record.ToXml());
+            var ns = new XmlNamespaceManager(xml.NameTable);
+            ns.AddNamespace("e", "http://schemas.microsoft.com/win/2004/08/events/event");
+
+            // 우선순위 1: TargetUserName
+            var node = xml.SelectSingleNode("//e:Data[@Name='TargetUserName']", ns)
+                    ?? xml.SelectSingleNode("//e:Data[@Name='SubjectUserName']", ns);
+
+            if (node != null && !string.IsNullOrEmpty(node.InnerText))
+                return node.InnerText;
+
+            // 최후의 보루: 기존 속성 기반
             if (record.Properties.Count > 1)
-            {
                 return record.Properties[1].Value?.ToString() ?? "Unknown";
-            }
+
             return "Unknown";
         }
         catch
