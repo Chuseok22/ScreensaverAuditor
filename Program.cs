@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Collections.Generic;
 using System.Xml;
+using System.Drawing.Text;
 
 class Program
 {
@@ -196,6 +197,8 @@ public class ScreensaverUsage
 
 public class ScreensaverAuditor
 {
+    // 감사할 하위 범주 상수 선언
+    private const string AuditSubcategory = "기타 로그온/로그오프 이벤트";
     public void EnableAuditPolicy()
     {
         try
@@ -205,22 +208,45 @@ public class ScreensaverAuditor
                 throw new UnauthorizedAccessException("이 작업을 수행하려면 관리자 권한이 필요합니다.");
             }
 
-            ProcessStartInfo startInfo = new ProcessStartInfo();
-            startInfo.FileName = "auditpol.exe";
-            // --subcategory 인자명은 반드시 "Other System Events"로 설정해야 화면보호기 이벤트가 포함됨
-            startInfo.Arguments = "/set /subcategory:\"Other System Events\" /success:enable /failure:enable";
-            startInfo.UseShellExecute = false;
-
-            Process? process = Process.Start(startInfo);
-            if (process == null)
+            var setInfo = new ProcessStartInfo
             {
-                throw new Exception("프로세스를 시작할 수 없습니다.");
+                FileName = "auditpol.exe",
+                Arguments = "/get /subcategory:\"{AuditSubcategory}\"",
+                UseShellExecute = false
+            };
+            using (var process = Process.Start(setInfo))
+            {
+                if (process == null)
+                {
+                    throw new Exception("프로세스를 시작할 수 없습니다.");
+                }
+
+                process.WaitForExit();
+                if (process.ExitCode != 0)
+                {
+                    throw new Exception("감사 정책을 가져오는 데 실패했습니다.");
+                }
             }
 
-            process.WaitForExit();
-            if (process.ExitCode != 0)
+            // 설정 확인 명령 실행
+            var getInfo = new ProcessStartInfo
             {
-                throw new Exception("감사 정책 활성화 실패");
+                FileName = "auditpol.exe",
+                Arguments = "/get /subcategory:\"{AuditSubcategory}\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true
+            };
+            using (var checkProcess = Process.Start(getInfo))
+            {
+                if (checkProcess == null)
+                {
+                    throw new Exception("프로세스를 시작할 수 없습니다.");
+                }
+
+                string output = checkProcess.StandardOutput.ReadToEnd();
+                checkProcess.WaitForExit();
+                Console.WriteLine("감사 정책 확인 결과:");
+                Console.WriteLine(output);
             }
         }
         catch (Exception ex)
@@ -354,10 +380,8 @@ public class ScreensaverAuditor
 
     private bool IsAdministrator()
     {
-        using (WindowsIdentity identity = WindowsIdentity.GetCurrent())
-        {
-            WindowsPrincipal principal = new WindowsPrincipal(identity);
-            return principal.IsInRole(WindowsBuiltInRole.Administrator);
-        }
+        var identity = WindowsIdentity.GetCurrent();
+        var principal = new WindowsPrincipal(identity);
+        return principal.IsInRole(WindowsBuiltInRole.Administrator);
     }
 }
