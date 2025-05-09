@@ -331,86 +331,51 @@ namespace ScreensaverAuditor
 
             try
             {
-                // 임시 CSV 파일 경로
-                string tempCsv = Path.Combine(Path.GetTempPath(), $"screensaver_events_{DateTime.Now:yyyyMMddHHmmss}.csv");
+                // PowerShell 세션 생성
+                using var powershell = System.Management.Automation.PowerShell.Create();
 
-                // PowerShell 명령어 구성
-                string command = $@"Get-WinEvent -FilterHashtable @{{
-                    LogName='Security'
-                    ID=4802,4803
-                    StartTime=[datetime]'{from:yyyy-MM-dd HH:mm:ss}'
-                    EndTime=[datetime]'{to:yyyy-MM-dd HH:mm:ss}'
-                }}";
-
-                if (user != null)
+                // 필터 해시테이블 생성
+                var filterHashtable = new System.Collections.Hashtable
                 {
-                    command += $" | Where-Object {{ $_.Message -like '*{user}*' }}";
-                }
-
-                command += " | Select-Object TimeCreated,Id,Message | Export-Csv -Path '" + tempCsv.Replace("'", "''") + "' -Encoding UTF8 -NoTypeInformation";
-
-                // PowerShell 실행
-                var startInfo = new ProcessStartInfo
-                {
-                    FileName = "powershell",
-                    Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{command}\"",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
+                    ["LogName"] = "Security",
+                    ["ID"] = new int[] { 4802, 4803 },
+                    ["StartTime"] = from,
+                    ["EndTime"] = to
                 };
 
-                using (var process = Process.Start(startInfo))
+                // Get-WinEvent 명령 설정
+                powershell.AddCommand("Get-WinEvent")
+                          .AddParameter("FilterHashtable", filterHashtable);
+
+                // 사용자 필터 추가 (있는 경우)
+                if (user != null)
                 {
-                    if (process == null) throw new Exception("PowerShell 실행 실패");
+                    powershell.AddCommand("Where-Object")
+                              .AddScript("{ $_.Message -like '*' + $UserFilter + '*' }")
+                              .AddParameter("UserFilter", user);
+                }
 
-                    // 오류 출력 확인
-                    string error = process.StandardError.ReadToEnd();
-                    process.WaitForExit();
+                // 출력 필드 선택
+                powershell.AddCommand("Select-Object")
+                          .AddParameter("Property", new string[] { "TimeCreated", "Id", "Message" });
 
-                    if (process.ExitCode != 0)
-                    {
-                        throw new Exception($"PowerShell 오류: {error}");
-                    }
+                // 명령 실행 및 결과 처리
+                foreach (var result in powershell.Invoke())
+                {
+                    var timestamp = (DateTime)result.Properties["TimeCreated"].Value;
+                    var eventId = result.Properties["Id"].Value.ToString();
+                    var message = result.Properties["Message"].Value.ToString();
 
-                    // CSV 파일 읽기
-                    if (File.Exists(tempCsv))
-                    {
-                        using (var reader = new StreamReader(tempCsv))
-                        {
-                            // 헤더 건너뛰기
-                            reader.ReadLine();
+                    string username = ExtractUsernameFromMessage(message);
 
-                            string? line;
-                            while ((line = reader.ReadLine()) != null)
-                            {
-                                var parts = line.Split(',');
-                                if (parts.Length >= 3)
-                                {
-                                    // CSV 데이터 파싱
-                                    var timestamp = DateTime.Parse(parts[0].Trim('"'));
-                                    var eventId = parts[1].Trim('"');
-                                    var message = parts[2].Trim('"');
+                    var evt = new ScreensaverEvent(
+                        timestamp,
+                        eventId,
+                        username,
+                        Environment.MachineName);
 
-                                    // 사용자 이름 추출 (Message에서)
-                                    string username = ExtractUsernameFromMessage(message);
-
-                                    var evt = new ScreensaverEvent(
-                                        timestamp,
-                                        eventId,
-                                        username,
-                                        Environment.MachineName);
-
-                                    events.Add(evt);
-                                    Console.WriteLine($"이벤트 발견: ID={evt.EventId}, 시간={evt.Timestamp:yyyy-MM-dd HH:mm:ss}, 사용자={evt.Username}");
-                                }
-                            }
-                        }
-
-                        // 임시 파일 삭제
-                        try { File.Delete(tempCsv); }
-                        catch { /* 무시 */ }
-                    }
+                    events.Add(evt);
+                    Console.WriteLine($"이벤트 발견: ID={evt.EventId}, 시간={evt.Timestamp:yyyy-MM-dd HH:mm:ss}, 사용자={evt.Username}");
                 }
             }
             catch (Exception ex)
@@ -431,7 +396,8 @@ namespace ScreensaverAuditor
             {
                 var match = System.Text.RegularExpressions.Regex.Match(
                     message,
-                    @"계정 이름:\s+(?<domain>[^\\]+)\\(?<username>[^\s\r\n]+)");
+                    @"(?:계정 이름|Account Name):\s+(?:(?<domain>[^\\\s]+)\\)?(?<username>[^\s\r\n]+)"
+                );
 
                 if (match.Success)
                 {
