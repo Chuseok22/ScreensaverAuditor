@@ -434,6 +434,11 @@ namespace ScreensaverAuditor
                         {
                             if (currentEvent.Count > 0)
                             {
+                                // 메시지 라인 병합
+                                if (messageLines.Count > 0)
+                                {
+                                    currentEvent["Message"] = string.Join("\n", messageLines);
+                                }
                                 try
                                 {
                                     if (currentEvent.TryGetValue("TimeCreated", out var timeCreatedStr) &&
