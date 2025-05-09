@@ -10,10 +10,10 @@ jobs:
     runs-on: windows-latest
     
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     
     - name: Setup .NET
-      uses: actions/setup-dotnet@v1
+      uses: actions/setup-dotnet@v3
       with:
         dotnet-version: 6.0.x
         
@@ -27,12 +27,12 @@ jobs:
       run: |
         $notes = Get-Content "RELEASE_NOTES.md" -Raw
         $notes = $notes -replace '\r\n', '%0A'
-        echo "::set-output name=content::$notes"
+        echo "content=$notes" >> $env:GITHUB_OUTPUT
         
     - name: Create Release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
-        files: bin/Release/net6.0/win-x64/publish/ScreensaverAuditor.exe
+        files: files: bin/Release/net6.0-windows/win-x64/publish/ScreensaverAuditor.exe
         body: ${{ steps.release_notes.outputs.content }}
         draft: false
         prerelease: false
