@@ -32,7 +32,7 @@ jobs:
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
-        files: files: bin/Release/net6.0-windows/win-x64/publish/ScreensaverAuditor.exe
+        files: bin/Release/net6.0-windows/win-x64/publish/ScreensaverAuditor.exe
         body: ${{ steps.release_notes.outputs.content }}
         draft: false
         prerelease: false
