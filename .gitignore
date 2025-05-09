@@ -52,3 +52,33 @@ artifacts/
 # 운영체제 파일
 .DS_Store
 Thumbs.db
+
+# User-specific files
+*.user
+*.suo
+*.userprefs
+
+# IDE specific files
+.vs/
+.vscode/
+
+# Application specific files
+*.csv
+version.json
+appsettings*.json
+
+# Temporary files
+*~
+*.swp
+*.swo
+*.tmp
+
+# Windows specific
+Thumbs.db
+Desktop.ini
+
+# Tools
+_ReSharper*/
+*.resharper
+[Tt]est[Rr]esult*
+*.dotCover
