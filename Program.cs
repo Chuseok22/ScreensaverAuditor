@@ -150,6 +150,7 @@ class Program
         Console.WriteLine("  --start-date <날짜>  시작 날짜 (형식: YYYY-MM-DD) 기본값: 7일전");
         Console.WriteLine("  --end-date <날짜>    종료 날짜 (형식: YYYY-MM-DD) 기본값: 오늘");
         Console.WriteLine("  --output <파일경로>  결과를 CSV 파일로 저장");
+        Console.WriteLine("  --user <사용자명>     특정 사용자의 이벤트만 필터링");
         Console.WriteLine("  --help               도움말 표시");
     }
 }
