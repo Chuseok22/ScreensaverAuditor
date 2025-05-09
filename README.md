@@ -9,6 +9,7 @@
 - 📅 기간별 데이터 조회 가능
 - 📁 CSV 형식으로 결과 내보내기
 - 🔐 감사 정책 자동 설정
+- 👤 특정 사용자 필터링
 
 ## 시스템 요구사항 💻
 
@@ -39,7 +40,8 @@ ScreensaverAuditor.exe [옵션]
 - `--enable-policy`: 화면보호기 감사 정책을 활성화합니다.
 - `--start-date <날짜>`: 시작 날짜를 지정합니다. (예: 2024-01-01)
 - `--end-date <날짜>`: 종료 날짜를 지정합니다. (예: 2024-01-31)
-- `--output <파일경로>`: 결과를 CSV 파일로 저장합니다.
+- `--output <파일경로>`: 결과를 CSV 파일로 저장합니다. (기본값: ScreensaverEvents.csv)
+- `--user <사용자>` 또는 `--username <사용자>`: 특정 사용자의 화면보호기 이벤트만 필터링합니다.
 - `--help`: 도움말을 표시합니다.
 
 ### 사용 예시 📝
@@ -54,14 +56,19 @@ ScreensaverAuditor.exe --enable-policy
 ScreensaverAuditor.exe --start-date 2024-01-01 --end-date 2024-01-31
 ```
 
-3. 결과를 CSV 파일로 저장:
+3. 특정 사용자의 데이터 조회:
+```
+ScreensaverAuditor.exe --user johndoe
+```
+
+4. 결과를 CSV 파일로 저장:
 ```
 ScreensaverAuditor.exe --output report.csv
 ```
 
-4. 모든 옵션 조합 사용:
+5. 모든 옵션 조합 사용:
 ```
-ScreensaverAuditor.exe --enable-policy --start-date 2024-01-01 --end-date 2024-01-31 --output report.csv
+ScreensaverAuditor.exe --enable-policy --start-date 2024-01-01 --end-date 2024-01-31 --user johndoe --output report.csv
 ```
 
 ## 결과 해석 📈
@@ -78,11 +85,22 @@ user1,24,12.5
 user2,15,8.2
 ```
 
+## 종료 코드 📝
+
+프로그램은 다음과 같은 종료 코드를 반환합니다:
+
+- `0`: 정상 종료
+- `1`: 관리자 권한 오류
+- `2`: 일반 오류 (잘못된 옵션 등)
+- `3`: 날짜 형식 오류 (YYYY-MM-DD 형식이 아닌 경우)
+- `4`: 사용자명 미입력 오류 (--user 옵션 사용 시)
+
 ## 주의사항 ⚠️
 
 1. 감사 정책 설정을 위해서는 반드시 관리자 권한으로 실행해야 합니다.
 2. 처음 사용 시 `--enable-policy` 옵션으로 감사 정책을 활성화해야 합니다.
 3. 과거 데이터는 Windows 이벤트 로그에 저장된 범위 내에서만 조회 가능합니다.
+4. `--user` 옵션을 사용할 경우, 사용자 이름은 대소문자를 구분하지 않고 검색됩니다.
 
 ## 문제 해결 🔧
 
@@ -93,6 +111,15 @@ user2,15,8.2
 1. 감사 정책이 활성화되어 있는지 확인
 2. 조회 기간이 올바른지 확인
 3. Windows 이벤트 로그가 활성화되어 있는지 확인
+4. `--user` 옵션을 사용할 경우, 정확한 사용자 이름을 입력했는지 확인
+
+### 날짜 형식 오류
+- 해결방법: 날짜는 반드시 'YYYY-MM-DD' 형식으로 입력 (예: 2024-01-31)
+- 잘못된 예: 2024/01/31, 31-01-2024
+
+### 사용자명 지정 오류
+- 해결방법: --user 옵션 사용 시 반드시 사용자명 입력
+- 예시: `--user johndoe`
 
 ## 라이선스 📜
 

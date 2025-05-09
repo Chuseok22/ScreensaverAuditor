@@ -12,14 +12,22 @@ class Program
     {
         try
         {
-            var auditor = new ScreensaverAuditor();
+            // 초기 변수 설정
 
+            // 실제 감사 정책 활성화, 이벤트 조회, 분석 기능 클래스
+            var auditor = new ScreensaverAuditor();
+            // --enable-policy 옵션이 없으면 기본값 false
             bool enablePolicy = false;
+            // 기본 날짜 범위 설정
+            // 시작 날짜: 7일 전, 종료 날짜: 오늘
             DateTime startDate = DateTime.Now.AddDays(-7);
             DateTime endDate = DateTime.Now;
-            // --output 옵션이 없으면 기본 파일명 사용
+            // 기본 CSV 파일명 --output 옵션이 없으면 기본 파일명 사용
             string outputPath = "ScreensaverEvents.csv";
+            // 사용자 필터링을 위한 변수 --user 옵션이 없으면 null
+            string? filterUsername = null;
 
+            // 옵션 파싱
             for (int i = 0; i < args.Length; i++)
             {
                 switch (args[i])
@@ -35,8 +43,8 @@ class Program
                                 startDate = sd;
                             else
                             {
-                                Console.WriteLine("Error: 시작 날짜 형식이 잘못되었습니다. YYYY-MM-DD 형식으로 입력하세요.");
-                                return 2;
+                                Console.Error.WriteLine($"Error: --start-date '{args[i + 1]}' 형식 오류 (YYYY-MM-DD 형식으로 입력하세요.)");
+                                return 3;
                             }
                         }
                         break;
@@ -48,8 +56,8 @@ class Program
                                 endDate = ed;
                             else
                             {
-                                Console.WriteLine("Error: 종료 날짜 형식이 잘못되었습니다. YYYY-MM-DD 형식으로 입력하세요.");
-                                return 2;
+                                Console.Error.WriteLine($"Error: --end-date '{args[i + 1]}' 형식 오류 (YYYY-MM-DD 형식으로 입력하세요.)");
+                                return 3;
                             }
                         }
                         break;
@@ -60,16 +68,32 @@ class Program
                             i++;
                         }
                         break;
+                    case "--user":
+                    case "--username":
+                        if (i + 1 < args.Length)
+                        {
+                            filterUsername = args[++i];
+                        }
+                        else
+                        {
+                            Console.Error.WriteLine("Error: --user 옵션 뒤에 사용자 이름을 입력해야 합니다.");
+                            return 4;
+                        }
+                        break;
                     case "--help":
                         ShowUsage();
                         return 0;
+                    default:
+                        Console.WriteLine($"Error: '{args[i]}'는(은) 인식할 수 없는 옵션입니다.");
+                        ShowUsage();
+                        return 2;
                 }
             }
 
             if (enablePolicy)
                 auditor.EnableAuditPolicy();
 
-            var events = auditor.GetScreensaverEvents(startDate, endDate);
+            var events = auditor.GetScreensaverEvents(startDate, endDate, filterUsername);
             var analysis = auditor.AnalyzeScreensaverUsage(events);
 
             // 결과 출력
