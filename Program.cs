@@ -380,8 +380,11 @@ public class ScreensaverAuditor
 
     private bool IsAdministrator()
     {
-        var identity = WindowsIdentity.GetCurrent();
-        var principal = new WindowsPrincipal(identity);
-        return principal.IsInRole(WindowsBuiltInRole.Administrator);
+        // WindowsIdentity는 IDisposable이므로 using 블록으로 감싸 리소스 누수 방지
+        using (var identity = WindowsIdentity.GetCurrent())
+        {
+            var principal = new WindowsPrincipal(identity);
+            return principal.IsInRole(WindowsBuiltInRole.Administrator);
+        }
     }
 }
