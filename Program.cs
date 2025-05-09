@@ -208,10 +208,11 @@ public class ScreensaverAuditor
                 throw new UnauthorizedAccessException("이 작업을 수행하려면 관리자 권한이 필요합니다.");
             }
 
+            // 1) 감사 정책 활성화
             var setInfo = new ProcessStartInfo
             {
                 FileName = "auditpol.exe",
-                Arguments = "/get /subcategory:\"{AuditSubcategory}\"",
+                Arguments = $"/set /subcategory:\"{AuditSubcategory}\" /success:enable /failure:enable",
                 UseShellExecute = false
             };
             using (var process = Process.Start(setInfo))
@@ -224,15 +225,15 @@ public class ScreensaverAuditor
                 process.WaitForExit();
                 if (process.ExitCode != 0)
                 {
-                    throw new Exception("감사 정책을 가져오는 데 실패했습니다.");
+                    throw new Exception("감사 정책을 설정하는 데 실패했습니다.");
                 }
             }
 
-            // 설정 확인 명령 실행
+            // 2) 설정 확인 명령 실행
             var getInfo = new ProcessStartInfo
             {
                 FileName = "auditpol.exe",
-                Arguments = "/get /subcategory:\"{AuditSubcategory}\"",
+                Arguments = $"/get /subcategory:\"{AuditSubcategory}\"",
                 UseShellExecute = false,
                 RedirectStandardOutput = true
             };
