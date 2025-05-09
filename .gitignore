@@ -1,0 +1,54 @@
+## .NET Core / Visual Studio
+bin/
+obj/
+out/
+
+# Visual Studio 임시 파일
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# 빌드 결과물
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# NuGet 패키지 폴더
+**/[Pp]ackages/*
+
+# 실행 파일 및 리소스
+*.dll
+*.exe
+*.pdb
+*.cache
+*.deps.json
+*.runtimeconfig.json
+
+# .NET Core 
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# IDE 관련
+.idea/
+*.sln.iml
+
+# 운영체제 파일
+.DS_Store
+Thumbs.db
