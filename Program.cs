@@ -32,9 +32,12 @@ class Program
             {
                 switch (args[i])
                 {
+                    // --enable-policy 옵션
+                    // 해당 옵션이 있으면 감사 정책 활성화 모드 작동
                     case "--enable-policy":
                         enablePolicy = true;
                         break;
+                    // --start-date, --end-date을 "yyyy-MM-dd" 포맷으로 파싱
                     case "--start-date":
                         if (i + 1 < args.Length)
                         {
@@ -61,6 +64,7 @@ class Program
                             }
                         }
                         break;
+                    // CSV 파일 저장 옵션
                     case "--output":
                         if (i + 1 < args.Length)
                         {
@@ -68,6 +72,7 @@ class Program
                             i++;
                         }
                         break;
+                    // 사용자 필터링 옵션
                     case "--user":
                     case "--username":
                         if (i + 1 < args.Length)
@@ -80,9 +85,11 @@ class Program
                             return 4;
                         }
                         break;
+                    // 도움말 옵션
                     case "--help":
                         ShowUsage();
                         return 0;
+                    // 모르는 옵션의 경우 즉시 에러 출력 후 사용법 출력
                     default:
                         Console.WriteLine($"Error: '{args[i]}'는(은) 인식할 수 없는 옵션입니다.");
                         ShowUsage();
@@ -90,6 +97,8 @@ class Program
                 }
             }
 
+            // --enable-policy 옵션이 활성화된 경우
+            // 내부에서 관리자 권한 확인 후 IsAdministrator() 메서드로 확인
             if (enablePolicy)
                 auditor.EnableAuditPolicy();
 
@@ -190,8 +199,6 @@ public class ScreensaverAuditor
             startInfo.FileName = "auditpol.exe";
             // --subcategory 인자명은 반드시 "Other System Events"로 설정해야 화면보호기 이벤트가 포함됨
             startInfo.Arguments = "/set /subcategory:\"Other System Events\" /success:enable /failure:enable";
-
-            // 이미 EXE 자체를 "관리자 권한으로 실행" 한 뒤라면 UAC 재호출(Verb/runas) 불필요
             startInfo.UseShellExecute = false;
 
             Process? process = Process.Start(startInfo);
