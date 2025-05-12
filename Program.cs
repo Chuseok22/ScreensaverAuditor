@@ -63,7 +63,7 @@ namespace ScreensaverAuditor
                 {
                     auditorService.EnableAuditPolicy();
                     Console.WriteLine("감사 정책이 활성화되었습니다.");
-                
+
                 }
                 catch (UnauthorizedAccessException)
                 {
@@ -85,11 +85,11 @@ namespace ScreensaverAuditor
             {
                 Console.Write("\n명령어 입력> ");
                 string? input = Console.ReadLine();
-                
+
                 if (string.IsNullOrWhiteSpace(input))
                     continue;
 
-                if (input.Equals("exit", StringComparison.OrdinalIgnoreCase) || 
+                if (input.Equals("exit", StringComparison.OrdinalIgnoreCase) ||
                     input.Equals("quit", StringComparison.OrdinalIgnoreCase))
                 {
                     return 0;
@@ -108,10 +108,36 @@ namespace ScreensaverAuditor
             }
         }
 
+        // 인용부호, Escape 문자를 지원하도록 개선
         private static string[] SplitCommandLine(string commandLine)
         {
-            // 간단한 명령줄 파싱 로직 (인용부호 처리 등 필요시 확장)
-            return commandLine.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            var args = new List<string>();
+            bool inQuotes = false;
+            var current = new System.Text.StringBuilder();
+
+            foreach (char c in commandLine)
+            {
+                if (c == '\"')
+                {
+                    inQuotes = !inQuotes;
+                    continue;
+                }
+
+                if (char.IsWhiteSpace(c) && !inQuotes)
+                {
+                    if (current.Length > 0)
+                    {
+                        args.Add(current.ToString());
+                        current.Clear();
+                    }
+                }
+                else
+                {
+                    current.Append(c);
+                }
+            }
+            if (current.Length > 0) args.Add(current.ToString());
+            return args.ToArray();
         }
 
         private static void DisplayHelp()
@@ -123,7 +149,7 @@ namespace ScreensaverAuditor
             Console.WriteLine("  --output <파일명>   - 결과 저장 파일 경로");
             Console.WriteLine("  --enable-policy    - 감사 정책 활성화");
             Console.WriteLine("  exit, quit         - 프로그램 종료");
-            Console.WriteLine("\n예시: --start 2023-01-01 --end 2025-01-31 --user Administrator");
+            Console.WriteLine("\n예시: --start-date 2023-01-01 --end-date 2025-01-31 --user Administrator");
         }
 
         private static int ProcessCommandLineArguments(string[] args)
@@ -132,9 +158,9 @@ namespace ScreensaverAuditor
             {
                 var options = CommandLineParser.ParseCommandLineOptions(args);
 
-                if (options.ShowHelp || 
-                    (args.Length == 1 && (args[0].Equals("help", StringComparison.OrdinalIgnoreCase) || 
-                                          args[0].Equals("--help", StringComparison.OrdinalIgnoreCase) || 
+                if (options.ShowHelp ||
+                    (args.Length == 1 && (args[0].Equals("help", StringComparison.OrdinalIgnoreCase) ||
+                                          args[0].Equals("--help", StringComparison.OrdinalIgnoreCase) ||
                                           args[0].Equals("-h", StringComparison.OrdinalIgnoreCase))))
                 {
                     DisplayHelp();

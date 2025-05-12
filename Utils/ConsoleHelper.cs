@@ -20,7 +20,7 @@ namespace ScreensaverAuditor.Utils
 
         public static void WaitForKey()
         {
-            Console.WriteLine("Press any key to exit...");
+            Console.WriteLine("종료하려면 아무키나 누르세요...");
             Console.ReadKey();
         }
 

@@ -9,15 +9,32 @@ namespace ScreensaverAuditor.Services
 {
     public class ExcelExporter
     {
-        private void EnsureValidPath(string outputPath)
+        // 엑셀 파일을 저장합니다.
+        public void SaveToExcel(string outputPath, List<ScreensaverEvent> events)
+        {
+            outputPath = EnsureValidPath(outputPath);
+
+            using var workbook = new XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("Events");
+
+            AddHeaders(worksheet);
+            AddData(worksheet, events);
+            ApplyFormatting(worksheet);
+
+            workbook.SaveAs(outputPath);
+        }
+
+        // 엑셀 파일을 저장할 경로를 확인하고, 필요시 디렉토리를 생성합니다.
+        private string EnsureValidPath(string outputPath)
         {
             string finalPath = !outputPath.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase)
                 ? outputPath + ".xlsx"
                 : outputPath;
 
+            // 이미 해당 경로에 파일이 존재하는 경우
             if (File.Exists(finalPath))
             {
-                try { File.Delete(finalPath); }
+                try { File.Delete(finalPath); } // 기존 파일 삭제
                 catch (IOException) { throw new IOException("Excel 파일이 열려 있습니다. 닫고 다시 시도하세요."); }
             }
 
@@ -26,8 +43,11 @@ namespace ScreensaverAuditor.Services
             {
                 Directory.CreateDirectory(dir);
             }
+
+            return finalPath;
         }
 
+        // 엑셀 파일에 헤더를 추가합니다.
         private void AddHeaders(IXLWorksheet worksheet)
         {
             string[] headers = {
@@ -49,6 +69,7 @@ namespace ScreensaverAuditor.Services
             }
         }
 
+        // 엑셀 파일에 데이터를 추가합니다.
         private void AddData(IXLWorksheet worksheet, List<ScreensaverEvent> events)
         {
             int row = 2;
@@ -58,6 +79,7 @@ namespace ScreensaverAuditor.Services
             }
         }
 
+        // 각 이벤트에 대한 정보를 엑셀 파일에 추가합니다.
         private void AddEventRow(IXLWorksheet worksheet, int row, ScreensaverEvent evt)
         {
             // 기본 정보
@@ -86,6 +108,7 @@ namespace ScreensaverAuditor.Services
             }
         }
 
+        // 엑셀 파일의 서식을 설정합니다.
         private void ApplyFormatting(IXLWorksheet worksheet)
         {
             var headerRange = worksheet.Range(1, 1, 1, 10);  // 10개 열
@@ -94,20 +117,6 @@ namespace ScreensaverAuditor.Services
 
             worksheet.SheetView.FreezeRows(1);
             worksheet.Columns().AdjustToContents();
-        }
-
-        public void SaveToExcel(string outputPath, List<ScreensaverEvent> events)
-        {
-            EnsureValidPath(outputPath);
-
-            using var workbook = new XLWorkbook();
-            var worksheet = workbook.Worksheets.Add("Events");
-
-            AddHeaders(worksheet);
-            AddData(worksheet, events);
-            ApplyFormatting(worksheet);
-
-            workbook.SaveAs(outputPath);
         }
     }
 }

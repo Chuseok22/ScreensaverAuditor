@@ -291,18 +291,17 @@ namespace ScreensaverAuditor.Services
             var sortedEvents = events.OrderBy(e => e.Timestamp).ToList();
 
             // 4802(시작)-4803(종료) 쌍 찾기
-            for (int i = 0; i < sortedEvents.Count - 1; i++)
+            var openMap = new Dictionary<(string user, string pc), ScreensaverEvent>();
+            foreach (var e in sortedEvents)
             {
-                if (sortedEvents[i].EventId == 4802 && sortedEvents[i + 1].EventId == 4803)
+                var key = (e.Username, e.ComputerName);
+                if (e.EventId == 4802)
+                    openMap[key] = e;      // 마지막 시작 이벤트로 갱신
+                else if (e.EventId == 4803 && openMap.TryGetValue(key, out var startEvt))
                 {
-                    // 같은 사용자 && 같은 PC의 이벤트
-                    if (sortedEvents[i].Username == sortedEvents[i + 1].Username &&
-                        sortedEvents[i].ComputerName == sortedEvents[i + 1].ComputerName)
-                    {
-                        TimeSpan duration = sortedEvents[i + 1].Timestamp - sortedEvents[i].Timestamp;
-                        sortedEvents[i].Duration = duration; // 시작 이벤트에 지속시간 설정
-                        sortedEvents[i + 1].Duration = duration; // 종료 이벤트에도 지속시간 설정
-                    }
+                    var duration = e.Timestamp - startEvt.Timestamp;
+                    startEvt.Duration = e.Duration = duration;
+                    openMap.Remove(key);
                 }
             }
         }
@@ -378,8 +377,8 @@ namespace ScreensaverAuditor.Services
 
             foreach (var u in dict.Values)
             {
-                // 화면보호기 활성화 횟수는 4802와 4803 이벤트의 합계로 계산
-                u.ScreensaverActivationCount = u.ScreensaverPeriods.Count(p => p.EventId == 4802 || p.EventId == 4803);
+                // 화면보호기 활성화 횟수는 4802 이벤트 수로 계산
+                u.ScreensaverActivationCount = u.ScreensaverPeriods.Count(p => p.EventId == 4802);
 
                 // 총 지속 시간 계산 - null 안전하게 처리
                 u.TotalScreensaverDuration = u.ScreensaverPeriods
