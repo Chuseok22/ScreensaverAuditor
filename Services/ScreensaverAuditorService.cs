@@ -66,6 +66,12 @@ namespace ScreensaverAuditor.Services
 
         public List<ScreensaverEvent> GetScreensaverEvents(DateTime from, DateTime to, string? user = null)
         {
+            // 관리자 권한 확인
+            if (!IsAdministrator())
+            {
+                throw new UnauthorizedAccessException("화면보호기 이벤트를 조회하려면 관리자 권한이 필요합니다.");
+            }
+            
             var events = new List<ScreensaverEvent>();
             Console.WriteLine($"조회 시작: {from:yyyy-MM-dd HH:mm:ss} ~ {to:yyyy-MM-dd HH:mm:ss}");
 

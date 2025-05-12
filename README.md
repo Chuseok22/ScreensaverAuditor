@@ -16,29 +16,46 @@
 
 - Windows 운영체제
 - .NET 6.0 이상
-- 관리자 권한 (감사 정책 설정 시 필요)
+- **관리자 권한 필수**: 화면보호기 이벤트 로그 및 감사 정책에 접근하려면 반드시 관리자 권한으로 실행해야 합니다.
+- 최소 화면 해상도: 1024x768 (GUI 모드)
+- Microsoft Excel (결과 파일을 열어볼 때 필요)
 
 ## 설치 방법 📥
 
 1. 최신 릴리즈에서 `ScreensaverAuditor.exe` 파일을 다운로드합니다.
 2. 원하는 위치에 파일을 저장합니다.
-3. 필요에 따라 관리자 권한으로 실행합니다.
+3. 애플리케이션을 실행하면 자동으로 관리자 권한을 요청합니다:
+   - UAC(사용자 계정 컨트롤) 대화 상자가 나타나면 "예"를 클릭하세요.
+   - 관리자 권한이 필요한 이유는 Windows 이벤트 로그 및 감사 정책에 접근하기 위함입니다.
 
 ## 사용 방법 🔍
 
 ### 기본 실행
+
+프로그램은 두 가지 모드로 실행할 수 있습니다:
+
+#### 그래픽 사용자 인터페이스(GUI) 모드
 ```
 ScreensaverAuditor.exe
 ```
-- 기본적으로 최근 7일간의 데이터를 분석합니다.
+- 기본적으로 그래픽 사용자 인터페이스로 실행됩니다.
+- 사용하기 쉬운 버튼 및 입력 폼으로 모든 기능에 접근할 수 있습니다.
+
+#### 콘솔 모드
+```
+ScreensaverAuditor.exe --console [옵션]
+```
+- 콘솔 기반의 명령줄 인터페이스로 실행됩니다.
+- 스크립트 및 자동화에 적합합니다.
 
 ### 명령줄 옵션
 
 ```
-ScreensaverAuditor.exe [옵션]
+ScreensaverAuditor.exe --console [옵션]
 ```
 
 #### 사용 가능한 옵션:
+- `--console`: GUI 대신 콘솔 모드로 실행합니다.
 - `--audit`: 기본 설정으로 감사를 실행합니다. (최근 7일간)
 - `--enable-policy`: 화면보호기 감사 정책을 활성화합니다.
 - `--start-date <날짜>`: 시작 날짜를 지정합니다. (예: 2024-01-01)
@@ -49,39 +66,52 @@ ScreensaverAuditor.exe [옵션]
 
 ### 사용 예시 📝
 
+#### GUI 모드 사용법
+1. `ScreensaverAuditor.exe`를 더블클릭하거나 명령줄에서 그냥 실행합니다.
+   ```
+   ScreensaverAuditor.exe
+   ```
+2. "감사 설정" 탭에서 날짜 범위와 사용자명(선택적)을 설정합니다.
+3. "결과 저장 경로"를 지정합니다.
+4. "감사 정책 활성화" 버튼을 클릭하여 정책을 활성화합니다. (관리자 권한 필요)
+5. "감사 실행" 버튼을 클릭하여 감사를 시작합니다.
+6. 결과는 자동으로 Excel 파일로 저장되며, "감사 결과" 탭에서 바로 확인할 수 있습니다.
+
+#### 콘솔 모드 사용법
+
 1. 기본 설정으로 간단히 감사하기:
 ```
-ScreensaverAuditor.exe --audit
+ScreensaverAuditor.exe --console --audit
 ```
 
 2. 감사 정책 활성화하기:
 ```
-ScreensaverAuditor.exe --enable-policy
+ScreensaverAuditor.exe --console --enable-policy
 ```
 
-2. 특정 기간의 데이터 조회:
+3. 특정 기간의 데이터 조회:
 ```
-ScreensaverAuditor.exe --start-date 2024-01-01 --end-date 2024-01-31
-```
-
-3. 특정 사용자의 데이터 조회:
-```
-ScreensaverAuditor.exe --user johndoe
+ScreensaverAuditor.exe --console --start-date 2024-01-01 --end-date 2024-01-31
 ```
 
-4. 결과를 Excel 파일로 저장:
+4. 특정 사용자의 데이터 조회:
 ```
-ScreensaverAuditor.exe --output report.xlsx
-```
-
-5. 모든 옵션 조합 사용:
-```
-ScreensaverAuditor.exe --enable-policy --start-date 2024-01-01 --end-date 2024-01-31 --user johndoe --output report.xlsx
+ScreensaverAuditor.exe --console --user johndoe
 ```
 
-6. 감사 정책 활성화 후 기본 설정으로 감사 실행:
+5. 결과를 Excel 파일로 저장:
 ```
-ScreensaverAuditor.exe --enable-policy --audit
+ScreensaverAuditor.exe --console --output report.xlsx
+```
+
+6. 모든 옵션 조합 사용:
+```
+ScreensaverAuditor.exe --console --enable-policy --start-date 2024-01-01 --end-date 2024-01-31 --user johndoe --output report.xlsx
+```
+
+7. 감사 정책 활성화 후 기본 설정으로 감사 실행:
+```
+ScreensaverAuditor.exe --console --enable-policy --audit
 ```
 
 ## 결과 해석 📈
@@ -130,6 +160,19 @@ Excel 출력에는 다음 항목이 포함됩니다:
 2. 조회 기간이 올바른지 확인
 3. Windows 이벤트 로그가 활성화되어 있는지 확인
 4. `--user` 옵션을 사용할 경우, 정확한 사용자 이름을 입력했는지 확인
+
+### GUI 관련 문제
+1. **화면이 나타나지 않는 경우**: 
+   - .NET 6.0이 제대로 설치되어 있는지 확인
+   - `--console` 옵션을 추가하여 콘솔 모드로 실행해 보세요
+
+2. **Excel 파일 열기 실패**: 
+   - Microsoft Excel이 설치되어 있는지 확인
+   - 파일 경로에 특수 문자가 포함되어 있지 않은지 확인
+
+3. **UI가 제대로 표시되지 않는 경우**:
+   - 화면 해상도가 최소 1024x768 이상인지 확인
+   - Windows의 디스플레이 설정에서 배율이 100%인지 확인
 
 ### 감사 정책 설정 🔐
 
