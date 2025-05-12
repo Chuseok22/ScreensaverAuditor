@@ -219,7 +219,7 @@ namespace ScreensaverAuditor
                     return;
                 }
                 
-                string outputPath = "화면보호기감사_" + DateTime.Now.ToString("yyyyMMdd") + ".xlsx";
+                string outputPath = $"화면보호기감사_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
                 excelExporter.SaveToExcel(outputPath, events);
                 
                 Console.WriteLine($"\n총 {events.Count}개 이벤트를 찾았습니다.");
@@ -293,7 +293,7 @@ namespace ScreensaverAuditor
                     return 0;
                 }
 
-                string outputPath = options.OutputPath ?? "화면보호기감사_" + DateTime.Now.ToString("yyyyMMdd") + ".xlsx";
+                string outputPath = options.OutputPath ?? "화면보호기감사_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".xlsx";
                 excelExporter.SaveToExcel(outputPath, events);
 
                 Console.WriteLine($"총 {events.Count}개의 이벤트를 찾았습니다.");
