@@ -7,6 +7,7 @@ namespace ScreensaverAuditor.Models
     {
         public bool EnablePolicy { get; set; }
         public bool ShowHelp { get; set; }
+        public bool RunAudit { get; set; }    // --audit 명령어용 속성
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
         public string? Username { get; set; }

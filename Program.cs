@@ -143,6 +143,7 @@ namespace ScreensaverAuditor
         private static void DisplayHelp()
         {
             Console.WriteLine("  --help               - 이 도움말을 표시합니다");
+            Console.WriteLine("  --audit              - 기본 설정으로 감사 실행 (7일 전 ~ 오늘)");
             Console.WriteLine("  --start-date <날짜>      - 조회 시작 날짜 (yyyy-MM-dd 형식)");
             Console.WriteLine("  --end-date <날짜>        - 조회 종료 날짜 (yyyy-MM-dd 형식)");
             Console.WriteLine("  --user <사용자명>    - 특정 사용자만 조회");
@@ -150,6 +151,7 @@ namespace ScreensaverAuditor
             Console.WriteLine("  --enable-policy    - 감사 정책 활성화");
             Console.WriteLine("  exit, quit         - 프로그램 종료");
             Console.WriteLine("\n예시: --start-date 2023-01-01 --end-date 2025-01-31 --user Administrator");
+            Console.WriteLine("\n간단 실행: --audit");
         }
 
         private static int ProcessCommandLineArguments(string[] args)
@@ -171,8 +173,30 @@ namespace ScreensaverAuditor
                 {
                     auditorService.EnableAuditPolicy();
                 }
+                
+                // --audit 명령어 처리 - 기본값을 그대로 사용하므로 별도 처리 필요 없음
+                if (options.RunAudit)
+                {
+                    Console.WriteLine("기본 설정으로 감사를 실행합니다 (7일 전 ~ 오늘)");
+                    // StartDate, EndDate는 이미 기본값으로 설정되어 있어 별도 설정 불필요
+                }
 
                 var events = auditorService.GetScreensaverEvents(options.StartDate, options.EndDate, options.Username);
+
+                if (events == null || events.Count == 0)
+                {
+                    Console.WriteLine("\n[결과 없음] 지정한 기간에 화면보호기 이벤트가 없습니다.");
+                    Console.WriteLine($"검색 기간: {options.StartDate:yyyy-MM-dd} ~ {options.EndDate:yyyy-MM-dd}");
+                    
+                    if (!string.IsNullOrEmpty(options.Username))
+                    {
+                        Console.WriteLine($"사용자: {options.Username}");
+                    }
+                    
+                    Console.WriteLine("\n다른 검색 조건을 시도해 보세요.");
+                    return 0;
+                }
+
                 var analysis = auditorService.AnalyzeScreensaverUsage(events);
 
                 ConsoleHelper.DisplayResults(analysis);

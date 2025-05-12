@@ -21,6 +21,10 @@ namespace ScreensaverAuditor.Utils
             {
                 switch (args[i].ToLower())
                 {
+                    case "--audit":
+                        options.RunAudit = true;
+                        break;
+
                     case "--enable-policy":
                         options.EnablePolicy = true;
                         break;
@@ -78,6 +82,7 @@ namespace ScreensaverAuditor.Utils
         public static void ShowUsage()
         {
             Console.WriteLine("사용법: ScreensaverAuditor.exe [옵션]");
+            Console.WriteLine("  --audit                  기본 설정으로 감사 실행 (7일 전 ~ 오늘)");
             Console.WriteLine("  --enable-policy          감사 정책 활성화");
             Console.WriteLine("  --start-date YYYY-MM-DD  조회 시작 날짜 (기본: 7일 전)");
             Console.WriteLine("  --end-date   YYYY-MM-DD  조회 종료 날짜 (기본: 오늘)");

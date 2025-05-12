@@ -7,6 +7,7 @@ using System.Security.Principal;
 using System.Xml;
 using System.Diagnostics.Eventing.Reader;
 using ScreensaverAuditor.Models;
+using System.Text.Json;
 
 namespace ScreensaverAuditor.Services
 {
@@ -72,12 +73,12 @@ namespace ScreensaverAuditor.Services
             {
                 // PowerShell 명령어 구성
                 string command = $@"
-            Get-WinEvent -FilterHashtable @{{
-                LogName='Security'
-                ID=4802,4803
-                StartTime=[datetime]'{from:yyyy-MM-dd HH:mm:ss}'
-                EndTime=[datetime]'{to:yyyy-MM-dd HH:mm:ss}'
-            }}";
+                    Get-WinEvent -FilterHashtable @{{
+                        LogName='Security'
+                        ID=4802,4803
+                        StartTime=[datetime]'{from:yyyy-MM-dd HH:mm:ss}'
+                        EndTime=[datetime]'{to:yyyy-MM-dd HH:mm:ss}'
+                    }}";
 
                 if (user != null)
                 {
@@ -87,7 +88,7 @@ namespace ScreensaverAuditor.Services
                     command += $" | Where-Object {{ $_.Message -like '*{user}*' }}";
                 }
 
-                command += " | Format-List TimeCreated,Id,MachineName,Message";
+                command += " | ConvertTo-Json -Depth 4"; // Depth 매개변수 추가하여 복잡한 객체도 직렬화되도록 함
 
                 // PowerShell 실행
                 var startInfo = new ProcessStartInfo
@@ -100,7 +101,7 @@ namespace ScreensaverAuditor.Services
                     CreateNoWindow = true
                 };
 
-                Console.WriteLine("PowerShell 명령 실행: " + command);
+                Console.WriteLine("PowerShell 명령 실행 중..."); 
 
                 using (var process = Process.Start(startInfo))
                 {
@@ -119,160 +120,50 @@ namespace ScreensaverAuditor.Services
                         throw new Exception($"PowerShell 오류: {error}");
                     }
 
-                    // 이벤트 파싱
-                    var currentEvent = new Dictionary<string, string>();
-                    var messageLines = new List<string>();
-                    bool inMessage = false;
+                    // 출력 파싱 부분을 JSON 기반으로 변경
+                    Console.WriteLine("이벤트 로그 파싱 시작...");
 
-                    foreach (var line in output.Split('\n'))
+                    // JSON 출력이 비어있는지 확인
+                    if (string.IsNullOrWhiteSpace(output) || output.Trim() == "null" || output.Trim() == "[]")
                     {
-                        string trimmedLine = line.Trim();
-
-                        if (string.IsNullOrWhiteSpace(trimmedLine))
-                        {
-                            if (currentEvent.Count > 0)
-                            {
-                                // 메시지 라인 병합
-                                if (messageLines.Count > 0)
-                                {
-                                    currentEvent["Message"] = string.Join("\n", messageLines);
-                                }
-                                try
-                                {
-                                    if (currentEvent.TryGetValue("TimeCreated", out var timeCreatedStr) &&
-                                        currentEvent.TryGetValue("Id", out var idStr) &&
-                                        DateTime.TryParse(timeCreatedStr, out var timeCreated) &&
-                                        int.TryParse(idStr, out var id))
-                                    {
-                                        string computerName = currentEvent.TryGetValue("MachineName", out var comp) ? comp : "Unknown";
-                                        string message = currentEvent.TryGetValue("Message", out var msg) ? msg : "";
-
-                                        // 메시지에서 정보 추출
-                                        string username = "Unknown";
-                                        string domain = "Unknown";
-                                        string securityId = "Unknown";
-                                        string logonId = "Unknown";
-                                        string sessionId = "Unknown";
-
-                                        // 메시지 파싱
-                                        foreach (var msgLine in message.Split('\n'))
-                                        {
-                                            string msgTrimmed = msgLine.Trim();
-
-                                            if (msgTrimmed.StartsWith("계정 이름:") || msgTrimmed.StartsWith("Account Name:"))
-                                            {
-                                                var parts = msgTrimmed.Split(':', 2);
-                                                if (parts.Length > 1)
-                                                {
-                                                    var accountParts = parts[1].Trim().Split('\\');
-                                                    if (accountParts.Length > 1)
-                                                    {
-                                                        domain = accountParts[0].Trim();
-                                                        username = accountParts[1].Trim();
-                                                    }
-                                                    else
-                                                    {
-                                                        username = parts[1].Trim();
-                                                    }
-                                                }
-                                            }
-                                            else if (msgTrimmed.StartsWith("계정 도메인:") || msgTrimmed.StartsWith("Account Domain:"))
-                                            {
-                                                var parts = msgTrimmed.Split(':', 2);
-                                                if (parts.Length > 1)
-                                                {
-                                                    domain = parts[1].Trim();
-                                                }
-                                            }
-                                            else if (msgTrimmed.StartsWith("보안 ID:") || msgTrimmed.StartsWith("Security ID:"))
-                                            {
-                                                var parts = msgTrimmed.Split(':', 2);
-                                                if (parts.Length > 1)
-                                                {
-                                                    securityId = parts[1].Trim();
-                                                }
-                                            }
-                                            else if (msgTrimmed.StartsWith("로그온 ID:") || msgTrimmed.StartsWith("Logon ID:"))
-                                            {
-                                                var parts = msgTrimmed.Split(':', 2);
-                                                if (parts.Length > 1)
-                                                {
-                                                    logonId = parts[1].Trim();
-                                                }
-                                            }
-                                            else if (msgTrimmed.StartsWith("세션 ID:") || msgTrimmed.StartsWith("Session ID:"))
-                                            {
-                                                var parts = msgTrimmed.Split(':', 2);
-                                                if (parts.Length > 1)
-                                                {
-                                                    sessionId = parts[1].Trim();
-                                                }
-                                            }
-                                        }
-
-                                        // 이벤트 추가
-                                        var evt = new ScreensaverEvent(
-                                            timeCreated,
-                                            id,
-                                            computerName,
-                                            message,
-                                            username,
-                                            domain,
-                                            securityId,
-                                            logonId,
-                                            sessionId);
-
-                                        events.Add(evt);
-                                        Console.WriteLine($"이벤트 추가: ID={id}, 시간={timeCreated:yyyy-MM-dd HH:mm:ss}, 사용자={username}, PC={computerName}");
-                                    }
-                                }
-                                catch (Exception ex)
-                                {
-                                    Console.WriteLine($"이벤트 처리 오류: {ex.Message}");
-                                }
-
-                                currentEvent.Clear();
-                                messageLines.Clear();
-                                inMessage = false;
-                            }
-                            continue;
-                        }
-
-                        if (trimmedLine.StartsWith("TimeCreated") ||
-                            trimmedLine.StartsWith("Id") ||
-                            trimmedLine.StartsWith("MachineName"))
-                        {
-                            int colonPos = trimmedLine.IndexOf(':');
-                            if (colonPos > 0)
-                            {
-                                string key = trimmedLine.Substring(0, colonPos).Trim();
-                                string value = trimmedLine.Substring(colonPos + 1).Trim();
-                                currentEvent[key] = value;
-                            }
-                        }
-                        else if (trimmedLine.StartsWith("Message"))
-                        {
-                            inMessage = true;
-                            int colonPos = trimmedLine.IndexOf(':');
-                            if (colonPos > 0)
-                            {
-                                messageLines.Add(trimmedLine.Substring(colonPos + 1).Trim());
-                            }
-                        }
-                        else if (inMessage)
-                        {
-                            messageLines.Add(trimmedLine);
-                        }
+                        Console.WriteLine("지정된 기간에 이벤트가 없습니다.");
+                        return events;
                     }
 
-                    // 마지막 이벤트 처리
-                    if (currentEvent.Count > 0 && messageLines.Count > 0)
+                    try
                     {
-                        currentEvent["Message"] = string.Join("\n", messageLines);
+                        // 단일 객체인지 배열인지 확인하여 적절히 처리
+                        JsonDocument doc = JsonDocument.Parse(output);
+                        if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                        {
+                            // 배열 처리
+                            foreach (JsonElement jsonEvent in doc.RootElement.EnumerateArray())
+                            {
+                                ProcessJsonEvent(jsonEvent, events);
+                            }
+                        }
+                        else if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                        {
+                            // 단일 객체 처리
+                            ProcessJsonEvent(doc.RootElement, events);
+                        }
+                        else
+                        {
+                            Console.WriteLine($"예상치 못한 JSON 형식: {doc.RootElement.ValueKind}");
+                            Console.WriteLine($"JSON 내용: {output.Substring(0, Math.Min(output.Length, 200))}..."); // 일부만 출력
+                        }
+                    }
+                    catch (JsonException ex)
+                    {
+                        Console.WriteLine($"JSON 파싱 오류: {ex.Message}");
+                        Console.WriteLine($"JSON 내용: {output.Substring(0, Math.Min(output.Length, 200))}...");
                     }
 
                     // 지속 시간 계산
-                    CalculateEventDurations(events);
+                    if (events.Count > 0)
+                    {
+                        CalculateEventDurations(events);
+                    }
                 }
             }
             catch (Exception ex)
@@ -285,6 +176,108 @@ namespace ScreensaverAuditor.Services
 
             Console.WriteLine($"총 {events.Count}개의 이벤트를 찾았습니다.");
             return events.OrderBy(e => e.Timestamp).ToList();
+        }
+
+        // JSON 이벤트 처리 메서드
+        private void ProcessJsonEvent(JsonElement jsonEvent, List<ScreensaverEvent> events)
+        {
+            try
+            {
+                // 필수 속성이 있는지 확인
+                if (!jsonEvent.TryGetProperty("TimeCreated", out var timeCreatedElement) ||
+                    !jsonEvent.TryGetProperty("Id", out var idElement) ||
+                    !jsonEvent.TryGetProperty("MachineName", out var machineElement) ||
+                    !jsonEvent.TryGetProperty("Message", out var messageElement))
+                {
+                    Console.WriteLine("필수 속성이 누락된 이벤트를 건너뜁니다.");
+                    return;
+                }
+
+                // 추가 속성 확인
+                string taskDisplayName = string.Empty;
+                string keywords = string.Empty;
+                string activityId = string.Empty;
+                string providerName = string.Empty;
+                
+                if (jsonEvent.TryGetProperty("TaskDisplayName", out var taskElement))
+                    taskDisplayName = taskElement.ToString();
+                
+                if (jsonEvent.TryGetProperty("KeywordsDisplayNames", out var keywordsElement) && 
+                    keywordsElement.ValueKind == JsonValueKind.Array)
+                {
+                    keywords = string.Join(", ", keywordsElement.EnumerateArray().Select(e => e.ToString()));
+                }
+                
+                if (jsonEvent.TryGetProperty("ActivityId", out var activityElement))
+                    activityId = activityElement.ToString();
+                    
+                if (jsonEvent.TryGetProperty("ProviderName", out var providerElement))
+                    providerName = providerElement.ToString();
+
+                // 시간 파싱 - 특별한 형식 확인 (/Date(timestamp)/)
+                DateTime timeCreated;
+                string timeCreatedStr = timeCreatedElement.ToString();
+                
+                if (timeCreatedStr.StartsWith("/Date(") && timeCreatedStr.EndsWith(")/"))
+                {
+                    // Microsoft JSON 날짜 형식 처리
+                    string timestampStr = timeCreatedStr.Substring(6, timeCreatedStr.Length - 8);
+                    if (long.TryParse(timestampStr.Split('+', '-')[0], out long timestamp))
+                    {
+                        // Unix 에폭 시간 (밀리초)를 DateTime으로 변환
+                        timeCreated = DateTimeOffset.FromUnixTimeMilliseconds(timestamp).DateTime;
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Microsoft JSON 날짜 형식 파싱 오류: {timeCreatedStr}");
+                        return;
+                    }
+                }
+                else if (!DateTime.TryParse(timeCreatedStr, out timeCreated))
+                {
+                    Console.WriteLine($"시간 파싱 오류: {timeCreatedStr}");
+                    return;
+                }
+
+                // ID 파싱
+                if (!int.TryParse(idElement.ToString(), out var id))
+                {
+                    Console.WriteLine($"ID 파싱 오류: {idElement}");
+                    return;
+                }
+
+                string computerName = machineElement.ToString();
+                string message = messageElement.ToString();
+
+                // 사용자 정보 추출
+                var userInfo = ExtractUserInfoFromMessage(message);
+
+                // 이벤트 종류 결정 (4802: 활성화, 4803: 비활성화)
+                string eventType = id == 4802 ? "화면보호기 시작" : "화면보호기 종료";
+
+                // 이벤트 생성 및 추가
+                var evt = new ScreensaverEvent(
+                    timeCreated,
+                    id,
+                    computerName,
+                    message,
+                    userInfo.Username,
+                    userInfo.Domain,
+                    userInfo.SecurityId,
+                    userInfo.LogonId,
+                    userInfo.SessionId,
+                    taskDisplayName,
+                    activityId,
+                    providerName,
+                    keywords);
+
+                events.Add(evt);
+                Console.WriteLine($"이벤트 추가: ID={id}, 시간={timeCreated:yyyy-MM-dd HH:mm:ss}, 사용자={userInfo.Username}, PC={computerName}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"이벤트 처리 중 오류 발생: {ex.Message}");
+            }
         }
 
         private void CalculateEventDurations(List<ScreensaverEvent> events)
@@ -308,23 +301,84 @@ namespace ScreensaverAuditor.Services
             }
         }
 
-        private static string ExtractUsernameFromMessage(string message)
+        // 메시지에서 사용자 정보를 추출하는 메서드
+        private UserInfo ExtractUserInfoFromMessage(string message)
         {
-            try
+            var userInfo = new UserInfo
             {
-                var match = System.Text.RegularExpressions.Regex.Match(
-                    message,
-                    @"(?:계정 이름|Account Name):\s+(?:(?<domain>[^\\\s]+)\\)?(?<username>[^\s\r\n]+)"
-                );
+                Username = "Unknown",
+                Domain = "Unknown",
+                SecurityId = "Unknown",
+                LogonId = "Unknown",
+                SessionId = "Unknown"
+            };
 
-                if (match.Success)
+            foreach (var msgLine in message.Split('\n'))
+            {
+                string msgTrimmed = msgLine.Trim();
+
+                if (msgTrimmed.StartsWith("계정 이름:") || msgTrimmed.StartsWith("Account Name:"))
                 {
-                    return match.Groups["username"].Value;
+                    var parts = msgTrimmed.Split(':', 2);
+                    if (parts.Length > 1)
+                    {
+                        var accountParts = parts[1].Trim().Split('\\');
+                        if (accountParts.Length > 1)
+                        {
+                            userInfo.Domain = accountParts[0].Trim();
+                            userInfo.Username = accountParts[1].Trim();
+                        }
+                        else
+                        {
+                            userInfo.Username = parts[1].Trim();
+                        }
+                    }
+                }
+                else if (msgTrimmed.StartsWith("계정 도메인:") || msgTrimmed.StartsWith("Account Domain:"))
+                {
+                    var parts = msgTrimmed.Split(':', 2);
+                    if (parts.Length > 1)
+                    {
+                        userInfo.Domain = parts[1].Trim();
+                    }
+                }
+                else if (msgTrimmed.StartsWith("보안 ID:") || msgTrimmed.StartsWith("Security ID:"))
+                {
+                    var parts = msgTrimmed.Split(':', 2);
+                    if (parts.Length > 1)
+                    {
+                        userInfo.SecurityId = parts[1].Trim();
+                    }
+                }
+                else if (msgTrimmed.StartsWith("로그온 ID:") || msgTrimmed.StartsWith("Logon ID:"))
+                {
+                    var parts = msgTrimmed.Split(':', 2);
+                    if (parts.Length > 1)
+                    {
+                        userInfo.LogonId = parts[1].Trim();
+                    }
+                }
+                else if (msgTrimmed.StartsWith("세션 ID:") || msgTrimmed.StartsWith("Session ID:"))
+                {
+                    var parts = msgTrimmed.Split(':', 2);
+                    if (parts.Length > 1)
+                    {
+                        userInfo.SessionId = parts[1].Trim();
+                    }
                 }
             }
-            catch { }
 
-            return "Unknown";
+            return userInfo;
+        }
+
+        // 사용자 정보를 담는 클래스
+        private class UserInfo
+        {
+            public string Username { get; set; } = "Unknown";
+            public string Domain { get; set; } = "Unknown";
+            public string SecurityId { get; set; } = "Unknown";
+            public string LogonId { get; set; } = "Unknown";
+            public string SessionId { get; set; } = "Unknown";
         }
 
         public List<ScreensaverUsage> AnalyzeScreensaverUsage(IEnumerable<ScreensaverEvent> events)
@@ -335,7 +389,7 @@ namespace ScreensaverAuditor.Services
             Console.WriteLine("분석 중인 이벤트:");
             foreach (var e in events)
             {
-                Console.WriteLine($"  ID: {e.EventId}, 시간: {e.Timestamp}, 사용자: {e.Username}, 컴퓨터: {e.ComputerName}");
+                Console.WriteLine($"  ID: {e.EventId}, 시간: {e.Timestamp}, 사용자: {e.Username}, 컴퓨터: {e.ComputerName}"); // TODO: 추후 프로덕션에서 제거
             }
 
             foreach (var e in events.OrderBy(e => e.Timestamp))
@@ -351,7 +405,7 @@ namespace ScreensaverAuditor.Services
                 {
                     case 4802: // 화면보호기 시작
                         usage.ScreensaverPeriods.Add((e.Timestamp, null, e.EventId));
-                        Console.WriteLine($"화면보호기 시작 추가: {e.Username}, {e.Timestamp}, {e.EventId}");
+                        Console.WriteLine($"화면보호기 시작 추가: {e.Username}, {e.Timestamp}, {e.EventId}"); // TODO: 추후 프로덕션에서 제거
                         break;
 
                     case 4803: // 화면보호기 종료
@@ -389,19 +443,6 @@ namespace ScreensaverAuditor.Services
             }
 
             return dict.Values.ToList();
-        }
-
-        private static string GetEventUsername(EventRecord rec)
-        {
-            try
-            {
-                var xml = new XmlDocument(); xml.LoadXml(rec.ToXml());
-                var ns = new XmlNamespaceManager(xml.NameTable); ns.AddNamespace("e", "http://schemas.microsoft.com/win/2004/08/events/event");
-                var node = xml.SelectSingleNode("//e:Data[@Name='TargetUserName']", ns) ?? xml.SelectSingleNode("//e:Data[@Name='SubjectUserName']", ns);
-                if (node != null && !string.IsNullOrEmpty(node.InnerText)) return node.InnerText;
-                return rec.Properties.Count > 1 ? rec.Properties[1].Value?.ToString() ?? "Unknown" : "Unknown";
-            }
-            catch { return "Unknown"; }
         }
 
         // 관리자 권한 확인 메서드
