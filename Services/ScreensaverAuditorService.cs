@@ -81,8 +81,10 @@ namespace ScreensaverAuditor.Services
 
                 if (user != null)
                 {
-                    var safeUser = user.Replace("`", "``").Replace("'", "''");
-                    command += $" | Where-Object {{ $_.Message -like '*{safeUser}*' }}";
+                    // 사용자 이름에 알파벳, 숫자, 공백, 점, 대시, 밑줄만 허용
+                    if (!System.Text.RegularExpressions.Regex.IsMatch(user, @"^[a-zA-Z0-9\s\._\-]+$"))
+                        throw new ArgumentException("사용자 이름에 허용되지 않는 문자가 포함되어 있습니다.");
+                    command += $" | Where-Object {{ $_.Message -like '*{user}*' }}";
                 }
 
                 command += " | Format-List TimeCreated,Id,MachineName,Message";
